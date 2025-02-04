@@ -13,65 +13,54 @@ on:
 
 jobs:
   check_label:
-    if: github.base_ref == 'main'
-    runs-on: [ self-hosted ]
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Debugging - Print GitHub Event Details
-        run: |
-          echo "GitHub Event: ${{ toJson(github.event) }}"
-          echo "Repository: ${{ github.repository }}"
-          echo "PR Number: ${{ github.event.number }}"
-
-      - name: gh auth login
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh auth login --with-token
+      - name: Ensure authentication
+        run: gh auth status
 
       - name: check label of PR to main
         continue-on-error: false
-        env:
-          TZ: "Asia/Tokyo"
         run: |
           i=0
           
           # PRのラベル情報を取得
-          echo "Fetching labels for PR #${{ github.event.number }} in repository ${{ github.repository }}"
-          items=$(gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
-          
-          # デバッグ用：取得したラベルのJSONを表示
-          echo "Labels JSON: $items"
+          items=$(GH_TOKEN=${{ secrets.GITHUB_TOKEN }} gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
 
-          # IFSを改行に設定してラベルをループ処理
+          # ラベルが付いていない場合のチェック
+          if [ -z "$items" ] || [ "$items" = "[]" ]; then
+              echo "エラー: PR にラベルが付いていません"
+              exit 1
+          fi
+
           IFS=$'\n'
-          for item in $(echo "$items" | jq -r '.[].name'); do
-              echo "Label found: $item"
+          for item in $(echo "$items" | jq -r 'map(.name) | .[]'); do
               case "${item}" in
                   "major"|"minor"|"patch")
-                      ((i++))
+                      (( ++i ))
                       ;;
               esac
           done
 
           # ラベルの数をチェック
           if [ $i -eq 0 ]; then
-              echo "エラー: 更新するリリースバージョンのlabelを付けてください (major, minor, patch のいずれか)"
+              echo "エラー: 更新するリリースバージョンのラベルを付けてください (major, minor, patch のいずれか)"
               exit 1
           fi
           if [ $i -gt 1 ]; then
-              echo "エラー: リリースバージョンのlabelを2つ以上つけないでください"
+              echo "エラー: リリースバージョンのラベルを2つ以上つけないでください"
               exit 1
           fi
 
-          echo "チェック完了: 適切なラベルが1つ設定されています。"
-
-      - name: gh auth logout
-        run: gh auth logout
+          echo "✅ チェック完了: 適切なラベルが1つ設定されています。"

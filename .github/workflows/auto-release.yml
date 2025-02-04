@@ -8,11 +8,13 @@ on:
 
 jobs:
   create-auto-tag:
-    if: github.ref == 'refs/heads/main' && github.event.pull_request.merged == true
-    runs-on: [ self-hosted ]
+    if: github.event.pull_request.base.ref == 'main' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
     permissions:
       contents: write
       pull-requests: write
+
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
@@ -20,19 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Debugging - Print GitHub Event Details
-        run: |
-          echo "GitHub Event: ${{ toJson(github.event) }}"
-          echo "Repository: ${{ github.repository }}"
-          echo "PR Number: ${{ github.event.number }}"
-
-      - name: gh auth login
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh auth login --with-token
+      - name: Ensure authentication
+        run: gh auth status
 
       - name: create release tag
-        continue-on-error: true
+        continue-on-error: false
         env:
           USE_ORIGINAL_TAG: false
           NEW_TAG_NAME: "original_tag"
@@ -56,17 +50,25 @@ jobs:
             # PR のラベルからバージョンアップの種類を取得
             UP_VER=""
             items=$(gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
-            echo "Labels JSON: $items"
+
+            if [ -z "$items" ] || [ "$items" = "[]" ]; then
+                echo "エラー: PR にラベルが付いていません（major, minor, patch のいずれかが必要）"
+                exit 1
+            fi
 
             IFS=$'\n'
-            for item in $(echo "$items" | jq -r '.[].name'); do
-                echo "Label found: $item"
+            for item in $(echo "$items" | jq -r 'map(.name) | .[]'); do
                 case "${item}" in
                     "major"|"minor"|"patch")
                         UP_VER=${item}
                         ;;
                 esac
             done
+
+            if [ -z "$UP_VER" ]; then
+                echo "エラー: リリースバージョンのラベル (major, minor, patch) が見つかりません"
+                exit 1
+            fi
 
             case "$(echo "${UP_VER}" | tr 'A-Z' 'a-z')" in
                 "major")
@@ -99,6 +101,3 @@ jobs:
 
           # タグとリリースを作成
           gh release create ${NEW_TAG} --notes-start-tag ${NOW_TAG} --latest --target ${{env.MASTER_BRANCH}} -F body.txt -t "${today} リリース"
-
-      - name: gh auth logout
-        run: gh auth logout
