@@ -14,14 +14,15 @@ on:
 jobs:
   check_label:
     if: github.event.pull_request.base.ref == 'main'
-    runs-on: ubuntu-latest  # ← 修正: OS 指定を 'ubuntu-latest' に変更
+    runs-on: ubuntu-latest
 
     permissions:
-      contents: read  # ← 修正: `read` のみに変更（write 不要）
+      contents: read  # `read` で十分
 
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # ← `GH_TOKEN` を環境変数に設定
 
     steps:
       - uses: actions/checkout@v3
@@ -32,22 +33,17 @@ jobs:
           echo "Repository: ${{ github.repository }}"
           echo "PR Number: ${{ github.event.number }}"
 
-      # 修正: `gh auth login --with-token` を削除し、`gh auth status` に変更
       - name: Ensure authentication
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh auth status
 
       - name: check label of PR to main
         continue-on-error: false
-        env:
-          TZ: "Asia/Tokyo"
         run: |
           i=0
           
           # PRのラベル情報を取得
           echo "Fetching labels for PR #${{ github.event.number }} in repository ${{ github.repository }}"
-          items=$(gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
+          items=$(GH_TOKEN=${{ secrets.GITHUB_TOKEN }} gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
           
           # デバッグ用：取得したラベルのJSONを表示
           echo "Labels JSON: $items"
