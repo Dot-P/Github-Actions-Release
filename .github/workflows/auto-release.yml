@@ -8,11 +8,13 @@ on:
 
 jobs:
   create-auto-tag:
-    if: github.ref == 'refs/heads/main' && github.event.pull_request.merged == true
-    runs-on: [ self-hosted ]
+    if: github.event.pull_request.base.ref == 'main' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest  # ← 修正: OS 指定を self-hosted から ubuntu-latest に変更
+
     permissions:
       contents: write
       pull-requests: write
+
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
@@ -68,6 +70,7 @@ jobs:
                 esac
             done
 
+            # バージョン更新
             case "$(echo "${UP_VER}" | tr 'A-Z' 'a-z')" in
                 "major")
                   MAJOR_VER=$((MAJOR_VER + 1))

@@ -13,11 +13,13 @@ on:
 
 jobs:
   check_label:
-    if: github.base_ref == 'main'
-    runs-on: [ self-hosted ]
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest  # ← 修正: OS 指定を 'ubuntu-latest' に変更
+
     permissions:
       contents: write
       pull-requests: write
+
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
