@@ -9,10 +9,10 @@ on:
 jobs:
   create-auto-tag:
     if: github.event.pull_request.base.ref == 'main' && github.event.pull_request.merged == true
-    runs-on: ubuntu-latest  # ← 修正: OS 指定を self-hosted から ubuntu-latest に変更
+    runs-on: ubuntu-latest  # OS 修正
 
     permissions:
-      contents: write
+      contents: write  # ← ここを追加（GH_TOKENの認証エラー対策）
       pull-requests: write
 
     timeout-minutes: 10
@@ -28,10 +28,11 @@ jobs:
           echo "Repository: ${{ github.repository }}"
           echo "PR Number: ${{ github.event.number }}"
 
-      - name: gh auth login
+      # 修正: `gh auth login --with-token` を削除し、`gh auth status` に変更
+      - name: Ensure authentication
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh auth login --with-token
+        run: gh auth status
 
       - name: create release tag
         continue-on-error: true
@@ -50,12 +51,10 @@ jobs:
           echo "NOW_TAG is ${NOW_TAG}"
 
           if [ "${USE_ORIGINAL_TAG}" == "false" ]; then
-            # バージョンを解析
             MAJOR_VER=$(echo "${NOW_TAG#v}" | awk -F. '{print $1}')
             MINOR_VER=$(echo "${NOW_TAG}" | awk -F. '{print $2}')
             PATCH_VER=$(echo "${NOW_TAG}" | awk -F. '{print $3}')
 
-            # PR のラベルからバージョンアップの種類を取得
             UP_VER=""
             items=$(gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
             echo "Labels JSON: $items"
@@ -70,7 +69,6 @@ jobs:
                 esac
             done
 
-            # バージョン更新
             case "$(echo "${UP_VER}" | tr 'A-Z' 'a-z')" in
                 "major")
                   MAJOR_VER=$((MAJOR_VER + 1))

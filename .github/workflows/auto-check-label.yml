@@ -17,8 +17,7 @@ jobs:
     runs-on: ubuntu-latest  # ← 修正: OS 指定を 'ubuntu-latest' に変更
 
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read  # ← 修正: `read` のみに変更（write 不要）
 
     timeout-minutes: 10
     env:
@@ -33,10 +32,11 @@ jobs:
           echo "Repository: ${{ github.repository }}"
           echo "PR Number: ${{ github.event.number }}"
 
-      - name: gh auth login
+      # 修正: `gh auth login --with-token` を削除し、`gh auth status` に変更
+      - name: Ensure authentication
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh auth login --with-token
+        run: gh auth status
 
       - name: check label of PR to main
         continue-on-error: false
@@ -54,7 +54,7 @@ jobs:
 
           # IFSを改行に設定してラベルをループ処理
           IFS=$'\n'
-          for item in $(echo "$items" | jq -r '.[].name'); do
+          for item in $(echo "$items" | jq -r '.labels | map(.name) | .[]'); do
               echo "Label found: $item"
               case "${item}" in
                   "major"|"minor"|"patch")
