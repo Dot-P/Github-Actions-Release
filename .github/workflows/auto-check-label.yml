@@ -1,7 +1,45 @@
+name: check label of PR to main
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+      - labeled
+      - unlabeled
+      - opened
+      - reopened
+
+jobs:
+  check_label:
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    timeout-minutes: 10
+    env:
+      MASTER_BRANCH: main
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GH_TOKEN を環境変数に設定
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Debugging - Print GitHub Event Details
+        run: |
+          echo "GitHub Event: ${{ toJson(github.event) }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "PR Number: ${{ github.event.number }}"
+
+      - name: Ensure authentication
+        run: gh auth status
+
       - name: check label of PR to main
         continue-on-error: false
         run: |
-          set -x  # ← 追加（デバッグ用）
+          set -x  # ← デバッグモードを追加
           i=0
           
           # PRのラベル情報を取得
@@ -11,7 +49,7 @@
           # デバッグ用：取得したラベルのJSONを表示
           echo "Labels JSON: $items"
 
-          # IFSを改行に設定してラベルをループ処理
+          # ラベルをループ処理
           IFS=$'\n'
           for item in $(echo "$items" | jq -r 'map(.name) | .[]'); do
               echo "Label found: $item"
@@ -22,7 +60,8 @@
               esac
           done
 
-          echo "Label count: $i"  # ← 追加（デバッグ用）
+          # デバッグ用：カウントを表示
+          echo "Label count: $i"
 
           # ラベルの数をチェック
           if [ $i -eq 0 ]; then
@@ -35,3 +74,6 @@
           fi
 
           echo "チェック完了: 適切なラベルが1つ設定されています。"
+
+      - name: gh auth logout
+        run: gh auth logout
