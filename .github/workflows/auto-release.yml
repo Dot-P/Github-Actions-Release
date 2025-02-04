@@ -21,16 +21,20 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Check out repository with full history
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # ← フルクローンにすることで `--unshallow` を不要に
 
       - name: Ensure authentication
         run: gh auth status
 
+      - name: fetch latest tags
+        run: git fetch --prune --tags -f  # ← `--unshallow` を削除
+
       - name: create release tag
         continue-on-error: false
         run: |
-          git fetch --prune --unshallow --tags -f
-          
           # 最新のタグ取得 (タグがない場合の処理を考慮)
           NOW_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null)
           if [ -z "$NOW_TAG" ]; then
