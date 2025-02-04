@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GH_TOKEN を環境変数に設定
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v3
@@ -39,14 +39,13 @@ jobs:
       - name: check label of PR to main
         continue-on-error: false
         run: |
-          set -x  # デバッグモードを有効化
+          set -x  # デバッグモード
           i=0
           
           # PRのラベル情報を取得
           echo "Fetching labels for PR #${{ github.event.number }} in repository ${{ github.repository }}"
           items=$(GH_TOKEN=${{ secrets.GITHUB_TOKEN }} gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
           
-          # デバッグ用：取得したラベルのJSONを表示
           echo "Labels JSON: $items"
 
           # JSONデータが空かどうかをチェック
@@ -55,18 +54,16 @@ jobs:
               exit 1
           fi
 
-          # IFSを改行に設定してラベルをループ処理
           IFS=$'\n'
           for item in $(echo "$items" | jq -r 'map(.name) | .[]'); do
               echo "Label found: $item"
               case "${item}" in
                   "major"|"minor"|"patch")
-                      ((i++))
+                      (( ++i ))  # ← ここを修正
                       ;;
               esac
           done
 
-          # デバッグ用：最終的なカウントを表示
           echo "Final Label count: $i"
 
           # ラベルの数をチェック
