@@ -1,0 +1,104 @@
+name: Create Pull requests released contents
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [closed]
+
+jobs:
+  create-auto-tag:
+    if: github.ref == 'refs/heads/main' && github.event.pull_request.merged == true
+    runs-on: [ self-hosted ]
+    permissions:
+      contents: write
+      pull-requests: write
+    timeout-minutes: 10
+    env:
+      MASTER_BRANCH: main
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Debugging - Print GitHub Event Details
+        run: |
+          echo "GitHub Event: ${{ toJson(github.event) }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "PR Number: ${{ github.event.number }}"
+
+      - name: gh auth login
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh auth login --with-token
+
+      - name: create release tag
+        continue-on-error: true
+        env:
+          USE_ORIGINAL_TAG: false
+          NEW_TAG_NAME: "original_tag"
+        run: |
+          git fetch --prune --unshallow --tags -f
+          
+          # 最新のタグ取得 (タグがない場合の処理を考慮)
+          NOW_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null)
+          if [ -z "$NOW_TAG" ]; then
+              echo "No existing tags found. Creating the first tag as v1.0.0"
+              NOW_TAG="v0.0.0"
+          fi
+          echo "NOW_TAG is ${NOW_TAG}"
+
+          if [ "${USE_ORIGINAL_TAG}" == "false" ]; then
+            # バージョンを解析
+            MAJOR_VER=$(echo "${NOW_TAG#v}" | awk -F. '{print $1}')
+            MINOR_VER=$(echo "${NOW_TAG}" | awk -F. '{print $2}')
+            PATCH_VER=$(echo "${NOW_TAG}" | awk -F. '{print $3}')
+
+            # PR のラベルからバージョンアップの種類を取得
+            UP_VER=""
+            items=$(gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
+            echo "Labels JSON: $items"
+
+            IFS=$'\n'
+            for item in $(echo "$items" | jq -r '.[].name'); do
+                echo "Label found: $item"
+                case "${item}" in
+                    "major"|"minor"|"patch")
+                        UP_VER=${item}
+                        ;;
+                esac
+            done
+
+            case "$(echo "${UP_VER}" | tr 'A-Z' 'a-z')" in
+                "major")
+                  MAJOR_VER=$((MAJOR_VER + 1))
+                  MINOR_VER=0
+                  PATCH_VER=0
+                  ;;
+                "minor")
+                  MINOR_VER=$((MINOR_VER + 1))
+                  PATCH_VER=0
+                  ;;
+                "patch")
+                  PATCH_VER=$((PATCH_VER + 1))
+                  ;;
+                *)
+                  echo "Error: Invalid UP_VER value: ${UP_VER}"
+                  exit 1
+                  ;;
+            esac
+            NEW_TAG="v${MAJOR_VER}.${MINOR_VER}.${PATCH_VER}"
+          else
+            NEW_TAG=${NEW_TAG_NAME}
+          fi
+
+          echo "NEW_TAG is ${NEW_TAG}"
+
+          # PR の内容をリリースノートに使用
+          gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json body -q '.body' > body.txt
+          today=$(date +'%Y/%m/%d')
+
+          # タグとリリースを作成
+          gh release create ${NEW_TAG} --notes-start-tag ${NOW_TAG} --latest --target ${{env.MASTER_BRANCH}} -F body.txt -t "${today} リリース"
+
+      - name: gh auth logout
+        run: gh auth logout
