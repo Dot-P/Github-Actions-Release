@@ -104,14 +104,20 @@ jobs:
 
           echo "NEW_TAG is ${NEW_TAG}"
 
-          # GitHub Release Notes の自動生成（Generate release notes API を使用）
+          # PR の body を取得
+          echo "Fetching PR body..."
+          PR_BODY=$(GH_TOKEN=${{ secrets.GITHUB_TOKEN }} gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json body -q '.body')
+
+          # 既存のリリースノートに PR の body を追加
+          echo -e "${GENERATED_NOTES}\n\n## Pull Request Details\n\n${PR_BODY}" > release_notes.txt
+
+          # GitHub Release Notes の自動生成
           echo "Generating release notes using GitHub API..."
           GENERATED_NOTES=$(GH_TOKEN=${{ secrets.GITHUB_TOKEN }} gh api repos/${{ github.repository }}/releases/generate-notes \
               -F tag_name="${NEW_TAG}" \
               -F target_commitish="${MASTER_BRANCH}" \
               -F previous_tag_name="${NOW_TAG}" \
               --jq .body)
-          echo "$GENERATED_NOTES" > release_notes.txt
 
           today=$(date +'%Y/%m/%d')
 
