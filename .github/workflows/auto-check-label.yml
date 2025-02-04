@@ -1,44 +1,7 @@
-name: check label of PR to main
-
-on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - synchronize
-      - labeled
-      - unlabeled
-      - opened
-      - reopened
-
-jobs:
-  check_label:
-    if: github.event.pull_request.base.ref == 'main'
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
-    timeout-minutes: 10
-    env:
-      MASTER_BRANCH: main
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GH_TOKEN を明示的に設定
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Debugging - Print GitHub Event Details
-        run: |
-          echo "GitHub Event: ${{ toJson(github.event) }}"
-          echo "Repository: ${{ github.repository }}"
-          echo "PR Number: ${{ github.event.number }}"
-
-      - name: Ensure authentication
-        run: gh auth status
-
       - name: check label of PR to main
         continue-on-error: false
         run: |
+          set -x  # ← 追加（デバッグ用）
           i=0
           
           # PRのラベル情報を取得
@@ -59,6 +22,8 @@ jobs:
               esac
           done
 
+          echo "Label count: $i"  # ← 追加（デバッグ用）
+
           # ラベルの数をチェック
           if [ $i -eq 0 ]; then
               echo "エラー: 更新するリリースバージョンのlabelを付けてください (major, minor, patch のいずれか)"
@@ -70,6 +35,3 @@ jobs:
           fi
 
           echo "チェック完了: 適切なラベルが1つ設定されています。"
-
-      - name: gh auth logout
-        run: gh auth logout
