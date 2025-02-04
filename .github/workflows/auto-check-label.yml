@@ -37,7 +37,7 @@ jobs:
         run: gh auth status
 
       - name: check label of PR to main
-        continue-on-error: true  # 一時的にエラーを無視し、全ての処理を実行
+        continue-on-error: false
         run: |
           set -x  # デバッグモードを有効化
           i=0
@@ -82,4 +82,9 @@ jobs:
           echo "✅ チェック完了: 適切なラベルが1つ設定されています。"
 
       - name: gh auth logout
-        run: gh auth logout
+        run: |
+          if gh auth status; then
+            gh auth logout
+          else
+            echo "No active authentication found, skipping logout."
+          fi
