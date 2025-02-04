@@ -24,27 +24,32 @@ jobs:
       - name: Check out repository with full history
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # ← フルクローンにすることで `--unshallow` を不要に
+          fetch-depth: 0  # フルクローンを実施
 
       - name: Ensure authentication
         run: gh auth status
 
       - name: fetch latest tags
-        run: git fetch --prune --tags -f  # ← `--unshallow` を削除
+        run: git fetch --prune --tags -f
 
       - name: create release tag
         continue-on-error: false
+        env:
+          USE_ORIGINAL_TAG: false
+          NEW_TAG_NAME: "original_tag"
         run: |
           # 最新のタグ取得 (タグがない場合の処理を考慮)
-          NOW_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null)
-          if [ -z "$NOW_TAG" ]; then
+          LATEST_TAG_COMMIT=$(git rev-list --tags --max-count=1)
+          if [ -z "$LATEST_TAG_COMMIT" ]; then
               echo "No existing tags found. Creating the first tag as v1.0.0"
               NOW_TAG="v0.0.0"
+          else
+              NOW_TAG=$(git describe --tags "$LATEST_TAG_COMMIT")
           fi
           echo "NOW_TAG is ${NOW_TAG}"
 
           if [ "${USE_ORIGINAL_TAG}" == "false" ]; then
-            # バージョンを解析
+            # 現在のバージョンを解析
             MAJOR_VER=$(echo "${NOW_TAG#v}" | awk -F. '{print $1}')
             MINOR_VER=$(echo "${NOW_TAG}" | awk -F. '{print $2}')
             PATCH_VER=$(echo "${NOW_TAG}" | awk -F. '{print $3}')
@@ -98,7 +103,7 @@ jobs:
 
           echo "NEW_TAG is ${NEW_TAG}"
 
-          # PR の内容をリリースノートに使用
+          # PR の内容をリリースノートとして使用
           gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json body -q '.body' > body.txt
           today=$(date +'%Y/%m/%d')
 
