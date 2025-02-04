@@ -9,10 +9,10 @@ on:
 jobs:
   create-auto-tag:
     if: github.event.pull_request.base.ref == 'main' && github.event.pull_request.merged == true
-    runs-on: ubuntu-latest  # OS 修正
+    runs-on: ubuntu-latest
 
     permissions:
-      contents: write  # ← ここを追加（GH_TOKENの認証エラー対策）
+      contents: write
       pull-requests: write
 
     timeout-minutes: 10
@@ -22,20 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Debugging - Print GitHub Event Details
-        run: |
-          echo "GitHub Event: ${{ toJson(github.event) }}"
-          echo "Repository: ${{ github.repository }}"
-          echo "PR Number: ${{ github.event.number }}"
-
-      # 修正: `gh auth login --with-token` を削除し、`gh auth status` に変更
       - name: Ensure authentication
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh auth status
 
       - name: create release tag
-        continue-on-error: true
+        continue-on-error: false
         env:
           USE_ORIGINAL_TAG: false
           NEW_TAG_NAME: "original_tag"
@@ -51,23 +42,33 @@ jobs:
           echo "NOW_TAG is ${NOW_TAG}"
 
           if [ "${USE_ORIGINAL_TAG}" == "false" ]; then
+            # バージョンを解析
             MAJOR_VER=$(echo "${NOW_TAG#v}" | awk -F. '{print $1}')
             MINOR_VER=$(echo "${NOW_TAG}" | awk -F. '{print $2}')
             PATCH_VER=$(echo "${NOW_TAG}" | awk -F. '{print $3}')
 
+            # PR のラベルからバージョンアップの種類を取得
             UP_VER=""
             items=$(gh pr view ${{ github.event.number }} --repo "${{ github.repository }}" --json labels -q '.labels')
-            echo "Labels JSON: $items"
+
+            if [ -z "$items" ] || [ "$items" = "[]" ]; then
+                echo "エラー: PR にラベルが付いていません（major, minor, patch のいずれかが必要）"
+                exit 1
+            fi
 
             IFS=$'\n'
-            for item in $(echo "$items" | jq -r '.[].name'); do
-                echo "Label found: $item"
+            for item in $(echo "$items" | jq -r 'map(.name) | .[]'); do
                 case "${item}" in
                     "major"|"minor"|"patch")
                         UP_VER=${item}
                         ;;
                 esac
             done
+
+            if [ -z "$UP_VER" ]; then
+                echo "エラー: リリースバージョンのラベル (major, minor, patch) が見つかりません"
+                exit 1
+            fi
 
             case "$(echo "${UP_VER}" | tr 'A-Z' 'a-z')" in
                 "major")
@@ -100,6 +101,3 @@ jobs:
 
           # タグとリリースを作成
           gh release create ${NEW_TAG} --notes-start-tag ${NOW_TAG} --latest --target ${{env.MASTER_BRANCH}} -F body.txt -t "${today} リリース"
-
-      - name: gh auth logout
-        run: gh auth logout
