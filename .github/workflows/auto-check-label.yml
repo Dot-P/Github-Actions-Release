@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read  # `read` で十分
+      contents: read
 
     timeout-minutes: 10
     env:
       MASTER_BRANCH: main
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # ← `GH_TOKEN` を環境変数に設定
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GH_TOKEN を明示的に設定
 
     steps:
       - uses: actions/checkout@v3
@@ -50,7 +50,7 @@ jobs:
 
           # IFSを改行に設定してラベルをループ処理
           IFS=$'\n'
-          for item in $(echo "$items" | jq -r '.labels | map(.name) | .[]'); do
+          for item in $(echo "$items" | jq -r 'map(.name) | .[]'); do
               echo "Label found: $item"
               case "${item}" in
                   "major"|"minor"|"patch")
